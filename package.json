@@ -1,0 +1,19 @@
+{
+  "name": "hundi",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "cd contracts && forge test",
+    "abi": "node scripts/export-abi.ts",
+    "wallets": "node --env-file=.env scripts/fund-wallets.ts",
+    "demo": "node --env-file=.env scripts/demo.ts",
+    "keeper": "node --env-file=.env scripts/keeper.ts"
+  },
+  "dependencies": {
+    "viem": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.0.0"
+  }
+}
