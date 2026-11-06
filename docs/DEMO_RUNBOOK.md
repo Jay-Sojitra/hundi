@@ -34,7 +34,7 @@ Open https://hundi-lovat.vercel.app
 | 0:00 | none | Show the home page | An exporter ships goods and waits 90 days. Selling the invoice brings cash early, but financiers working separately may not see each other's books, so one invoice can be financed twice. |
 | 0:25 | Verifier | Verifier screen: show the approved list. | Only verified parties can take part, and every rule checks this list on chain. |
 | 0:45 | Exporter | Exporter screen. Importer's wallet, reference `IRN-2026-000142`, face 5, discount 4, due in 5 minutes. Issue. | The exporter registers the invoice. Only a hash goes on chain. |
-| 1:00 | Exporter | Press Issue invoice again without changing anything. | Same invoice again: the contract refuses. Nobody financing through Hundi can be sold a duplicate. |
+| 1:00 | Exporter | Press Issue invoice again without changing anything. | Same invoice again: the contract refuses. A reference can only be registered once, by anyone. |
 | 1:15 | Importer | Importer screen. Confirm the invoice, then Allow 5 USDT. | No units exist until the importer who owes the money confirms it. |
 | 1:35 | Investor A | Investor screen. Buy face value 3, pay 2.88. Open the transaction on the explorer. | The exporter is paid now. USDT and units move in one transaction, so neither side can be left short. |
 | 2:00 | Investor A | Under Your holdings, transfer 1 to the outsider: blocked. Then transfer 1 to Investor B: works. | Units can't leave the verified group. |
