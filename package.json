@@ -5,9 +5,9 @@
   "scripts": {
     "test": "cd contracts && forge test",
     "abi": "node scripts/export-abi.ts",
-    "wallets": "node --env-file=.env scripts/fund-wallets.ts",
-    "demo": "node --env-file=.env scripts/demo.ts",
-    "keeper": "node --env-file=.env scripts/keeper.ts"
+    "wallets": "node --env-file=.env --no-warnings scripts/fund-wallets.ts",
+    "demo": "node --env-file=.env --no-warnings scripts/demo.ts",
+    "keeper": "node --env-file=.env --no-warnings scripts/keeper.ts"
   },
   "dependencies": {
     "viem": "^2.0.0"

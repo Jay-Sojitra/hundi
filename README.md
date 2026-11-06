@@ -19,9 +19,28 @@ An exporter ships goods and then waits 60 to 90 days to be paid. Invoice discoun
 
 ## Deployed on Whitechain Sepolia (chain 1874)
 
-<!-- deployment -->
-Deployment pending.
-<!-- /deployment -->
+**Live app:** https://hundi-lovat.vercel.app
+
+| Contract | Address (verified) |
+|---|---|
+| HundiInvoice | [`0xbEaC6bCec891bC4F04bBD5b686fB4E02e22a8F31`](https://explorer.testnet.whitechain.io/address/0xbEaC6bCec891bC4F04bBD5b686fB4E02e22a8F31) |
+| ParticipantRegistry | [`0x7a4C69634E2FC1B17C3b3FF25e72bB8bb56e8484`](https://explorer.testnet.whitechain.io/address/0x7a4C69634E2FC1B17C3b3FF25e72bB8bb56e8484) |
+| USDT (prize token, not ours) | [`0xcedfB56113143d55b2358b8CFbB0dEB5Ad2f55a7`](https://explorer.testnet.whitechain.io/address/0xcedfB56113143d55b2358b8CFbB0dEB5Ad2f55a7) |
+
+**USDT settled in the main flow, on the explorer:**
+
+- [Investor funds an invoice](https://explorer.testnet.whitechain.io/tx/0x67f4a4ae8422ba0d188e3324a6692b58dde32c415a3a3ea3b075ceec46fae2ae): 2.88 USDT to the exporter and 3.00 USDT of face value to the investor, in one transaction
+- [Contract collects from the importer on the due date](https://explorer.testnet.whitechain.io/tx/0x23dc5327fb469500ec5897328154cccf78b3963e7e03a2bc53fefe652f97890c)
+- [Holders are paid, with no action from them](https://explorer.testnet.whitechain.io/tx/0xa8402f266fdded41c10a3c8a9cca721f5c09f18015741ed5fb3287513cce7128)
+
+**The contract refusing, on the explorer:**
+
+- [Same invoice issued twice](https://explorer.testnet.whitechain.io/tx/0x2621b381494e09ee6d3eb6b487a9d66401632845847b8d02c4e90a1de1bf69c8): `DuplicateInvoice`
+- [Funding before the importer confirms](https://explorer.testnet.whitechain.io/tx/0x808b0347f71be78d2650c298090ae1c91fef42dd468a84265e1d5529a2e537b3): `NotAcknowledged`
+- [Transfer to an unverified wallet](https://explorer.testnet.whitechain.io/tx/0x3b2dbddd3bec61b72e12d126b20dfd62b983139812a8fcea15d2b43753af166e): `TransferNotAllowed`
+- [Transfer after the due date](https://explorer.testnet.whitechain.io/tx/0x48207e689178cca31fb5c8c9093ea78659398d167163f70896bf4d0f0f759446): `PastDueDate`
+
+The full run, including an invoice that defaults and pays out pro rata, is in [docs/DEMO_RUN.md](docs/DEMO_RUN.md).
 
 ## Rules the contract enforces
 
@@ -133,6 +152,7 @@ pnpm --dir web dev
 - **IRN uniqueness is only as good as the input.** There is no live integration with India's invoice registration portal, so a seller could invent a reference. Importer acknowledgement is the check against that.
 - **Repayment relies on a USDT allowance the importer can revoke,** which leads to the default path. There is no credit assessment, insurance or recourse to the exporter.
 - **Short due dates and a 60-second grace period are for the demo.** Production would enforce a minimum tenor and a grace period of days.
+- **The web app uses approve then fund,** so a purchase takes two wallet prompts. `fundWithPermit` is deployed and tested against the real USDT, but isn't wired into the app yet.
 - **The keeper runs on one machine.** Anyone can call the same functions, but nothing guarantees someone does.
 - **Testnet only, not audited.** Selling receivables to investors and using stablecoins for trade settlement have legal and regulatory requirements in India and elsewhere that this project doesn't address.
 
