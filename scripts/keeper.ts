@@ -1,8 +1,9 @@
 // Settles invoices once they are due and pays out holders, so investors don't have to act.
 // settle and distribute take no permissions: this wallet has no special rights.
 // Usage: pnpm keeper [--once]
+import { erc20Abi } from "viem";
 import { hundiAbi } from "../web/src/lib/abi.ts";
-import { confirm, publicClient, sleep, txLink, wallet } from "./lib.ts";
+import { USDT, confirm, publicClient, sleep, txLink, usdtBalance, wallet } from "./lib.ts";
 
 const HUNDI = process.env.HUNDI as `0x${string}`;
 const ACKNOWLEDGED = 2;
@@ -14,15 +15,28 @@ const keeper = wallet("VERIFIER");
 const read = <T>(functionName: string, args: unknown[] = []) =>
   publicClient.readContract({ address: HUNDI, abi: hundiAbi, functionName, args } as never) as Promise<T>;
 
+/** True if settle would change anything. Otherwise a short-paid invoice would burn gas until it defaults. */
+async function worthSettling(invoice: { debtor: `0x${string}`; dueDate: bigint }, now: bigint, grace: bigint) {
+  if (now >= invoice.dueDate + grace) return true;
+  const allowance = await publicClient.readContract({
+    address: USDT,
+    abi: erc20Abi,
+    functionName: "allowance",
+    args: [invoice.debtor, HUNDI],
+  });
+  return allowance > 0n && (await usdtBalance(invoice.debtor)) > 0n;
+}
+
 export async function runOnce(log: (line: string) => void = console.log) {
   const count = await read<bigint>("invoiceCount");
+  const grace = await read<bigint>("gracePeriod");
   const { timestamp: now } = await publicClient.getBlock();
 
   for (let id = 1n; id <= count; id++) {
-    const invoice = await read<{ status: number; dueDate: bigint }>("getInvoice", [id]);
+    const invoice = await read<{ status: number; dueDate: bigint; debtor: `0x${string}` }>("getInvoice", [id]);
     let status = invoice.status;
 
-    if (status === ACKNOWLEDGED && now >= invoice.dueDate) {
+    if (status === ACKNOWLEDGED && now >= invoice.dueDate && (await worthSettling(invoice, now, grace))) {
       const hash = await keeper.writeContract({ address: HUNDI, abi: hundiAbi, functionName: "settle", args: [id] });
       await confirm(hash);
       log(`Invoice ${id}: settle ${txLink(hash)}`);
