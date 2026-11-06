@@ -42,12 +42,21 @@ abstract contract HundiBase is Test {
     }
 
     function _deployHundi() internal virtual returns (HundiInvoice) {
-        return new HundiInvoice(registry, usdt);
+        return new HundiInvoice(registry, usdt, uint64(GRACE));
     }
 
     function _issue(bytes32 ref) internal returns (uint256) {
         vm.prank(exporter);
         return hundi.issue(importer, FACE, uint64(block.timestamp) + TENOR, DISCOUNT, ref, DOC);
+    }
+
+    function _fundAs(address who, uint256 id, uint128 units) internal {
+        uint256 price = hundi.quote(id, units);
+        usdt.mint(who, price);
+        vm.startPrank(who);
+        usdt.approve(address(hundi), price);
+        hundi.fund(id, units);
+        vm.stopPrank();
     }
 
     function _issueAndAcknowledge() internal returns (uint256 id) {

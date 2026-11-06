@@ -41,12 +41,18 @@ contract HundiInvoice is ERC1155, ReentrancyGuard {
 
     ParticipantRegistry public immutable registry;
     IERC20 public immutable usdt;
+    /// @notice Time after the due date before a short-paid invoice is marked as defaulted.
+    uint64 public immutable gracePeriod;
 
     uint256 public invoiceCount;
     mapping(uint256 id => Invoice) private _invoices;
     /// @notice Every invoice reference ever registered. Entries are never cleared.
     mapping(bytes32 refHash => bool) public refUsed;
     mapping(uint256 id => EnumerableSet.AddressSet) private _holders;
+    /// @notice USDT received for each invoice. Only this contract ever receives repayment.
+    mapping(uint256 id => uint256) public collected;
+    /// @notice USDT already paid to each holder of each invoice.
+    mapping(uint256 id => mapping(address holder => uint256)) public claimed;
 
     event InvoiceIssued(
         uint256 indexed id,
@@ -61,6 +67,10 @@ contract HundiInvoice is ERC1155, ReentrancyGuard {
     event InvoiceAcknowledged(uint256 indexed id, address indexed debtor);
     event InvoiceRejected(uint256 indexed id, address indexed debtor);
     event InvoiceFunded(uint256 indexed id, address indexed investor, uint256 units, uint256 price);
+    event InvoiceRepaid(uint256 indexed id, address indexed payer, uint256 amount, uint256 totalCollected);
+    event InvoiceSettled(uint256 indexed id);
+    event InvoiceDefaulted(uint256 indexed id, uint256 totalCollected);
+    event HolderPaid(uint256 indexed id, address indexed holder, uint256 amount);
 
     error NotEligible(address account, uint8 role);
     error DuplicateInvoice(bytes32 refHash);
@@ -72,10 +82,14 @@ contract HundiInvoice is ERC1155, ReentrancyGuard {
     error NotAcknowledged(uint256 id);
     error TransferNotAllowed(uint256 id, address account);
     error InsufficientUnits();
+    error NotDue();
+    error NotSettled();
+    error NothingToClaim();
 
-    constructor(ParticipantRegistry registry_, IERC20 usdt_) ERC1155("") {
+    constructor(ParticipantRegistry registry_, IERC20 usdt_, uint64 gracePeriod_) ERC1155("") {
         registry = registry_;
         usdt = usdt_;
+        gracePeriod = gracePeriod_;
     }
 
     // ---------------------------------------------------------------------
@@ -172,6 +186,100 @@ contract HundiInvoice is ERC1155, ReentrancyGuard {
         emit InvoiceFunded(id, msg.sender, units, price);
         usdt.safeTransferFrom(msg.sender, inv.seller, price);
         _safeTransferFrom(inv.seller, msg.sender, id, units, "");
+    }
+
+    // ---------------------------------------------------------------------
+    // Settlement
+    // ---------------------------------------------------------------------
+
+    /// @notice Collects what the debtor owes, once the due date has passed. Anyone can call this.
+    ///         A short payment stays open during the grace period, then the invoice defaults.
+    function settle(uint256 id) external nonReentrant {
+        Invoice storage inv = _getInvoice(id);
+        if (inv.status != Status.Acknowledged) revert WrongStatus(inv.status);
+        if (block.timestamp < inv.dueDate) revert NotDue();
+
+        uint256 amount = Math.min(
+            inv.face - collected[id], Math.min(usdt.allowance(inv.debtor, address(this)), usdt.balanceOf(inv.debtor))
+        );
+        // A failed pull must still let the invoice reach Defaulted, so this does not revert.
+        if (amount != 0 && usdt.trySafeTransferFrom(inv.debtor, address(this), amount)) {
+            _recordRepayment(id, inv, inv.debtor, amount);
+        }
+        if (inv.status == Status.Acknowledged && block.timestamp >= uint256(inv.dueDate) + gracePeriod) {
+            inv.status = Status.Defaulted;
+            emit InvoiceDefaulted(id, collected[id]);
+        }
+    }
+
+    /// @notice Pays towards an invoice directly: early repayment, or recovery after a default.
+    function repay(uint256 id, uint256 amount) external nonReentrant {
+        Invoice storage inv = _getInvoice(id);
+        if (inv.status != Status.Acknowledged && inv.status != Status.Defaulted) revert WrongStatus(inv.status);
+
+        amount = Math.min(amount, inv.face - collected[id]);
+        if (amount == 0) revert NothingToClaim();
+        usdt.safeTransferFrom(msg.sender, address(this), amount);
+        _recordRepayment(id, inv, msg.sender, amount);
+    }
+
+    /// @notice Pays out holders in the range [start, start + count). Anyone can call this, so
+    ///         investors are paid without acting. A holder who can't be paid is skipped and
+    ///         keeps their claim, so one blocked or frozen wallet can't stop the others.
+    function distribute(uint256 id, uint256 start, uint256 count) external nonReentrant {
+        Status status = _getInvoice(id).status;
+        if (status != Status.Settled && status != Status.Defaulted) revert NotSettled();
+
+        EnumerableSet.AddressSet storage holders = _holders[id];
+        uint256 end = Math.min(start + count, holders.length());
+        // Descending, because paying a holder in full removes them by swapping in the last entry.
+        for (uint256 i = end; i > start; --i) {
+            address holder = holders.at(i - 1);
+            if (!registry.isFrozen(holder)) _pay(id, holder);
+        }
+    }
+
+    /// @notice Lets a holder collect their own share at any time after settlement or default.
+    function redeem(uint256 id) external nonReentrant {
+        Status status = _getInvoice(id).status;
+        if (status != Status.Settled && status != Status.Defaulted) revert NotSettled();
+        if (registry.isFrozen(msg.sender)) revert TransferNotAllowed(id, msg.sender);
+        if (!_pay(id, msg.sender)) revert NothingToClaim();
+    }
+
+    /// @notice USDT a holder can collect now: their share of everything collected, less what
+    ///         they already received. Balances cannot change once an invoice leaves Acknowledged.
+    function claimable(uint256 id, address holder) public view returns (uint256) {
+        Invoice storage inv = _getInvoice(id);
+        if (inv.status != Status.Settled && inv.status != Status.Defaulted) return 0;
+        uint256 entitled = Math.mulDiv(balanceOf(holder, id), collected[id], inv.face);
+        return entitled > claimed[id][holder] ? entitled - claimed[id][holder] : 0;
+    }
+
+    function _recordRepayment(uint256 id, Invoice storage inv, address payer, uint256 amount) internal {
+        uint256 total = collected[id] + amount;
+        collected[id] = total;
+        emit InvoiceRepaid(id, payer, amount, total);
+        if (total == inv.face) {
+            inv.status = Status.Settled;
+            emit InvoiceSettled(id);
+        }
+    }
+
+    function _pay(uint256 id, address holder) internal returns (bool) {
+        uint256 amount = claimable(id, holder);
+        if (amount == 0) return false;
+
+        uint256 alreadyClaimed = claimed[id][holder];
+        claimed[id][holder] = alreadyClaimed + amount;
+        if (!usdt.trySafeTransfer(holder, amount)) {
+            claimed[id][holder] = alreadyClaimed;
+            return false;
+        }
+        emit HolderPaid(id, holder, amount);
+        // Units are spent once fully paid. After a default they stay, to claim later recoveries.
+        if (_invoices[id].status == Status.Settled) _burn(holder, id, balanceOf(holder, id));
+        return true;
     }
 
     // ---------------------------------------------------------------------

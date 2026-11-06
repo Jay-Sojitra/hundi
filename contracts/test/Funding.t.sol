@@ -8,15 +8,6 @@ contract FundingTest is HundiBase {
     uint128 constant UNITS = 4_000e6;
     uint256 constant PRICE = 3_840e6; // 4% below face value
 
-    function _fundAs(address who, uint256 id, uint128 units) internal {
-        uint256 price = hundi.quote(id, units);
-        usdt.mint(who, price);
-        vm.startPrank(who);
-        usdt.approve(address(hundi), price);
-        hundi.fund(id, units);
-        vm.stopPrank();
-    }
-
     function _permitSig(uint256 key, address owner, uint256 value, uint256 deadline)
         internal
         view
