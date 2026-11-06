@@ -149,10 +149,10 @@ export function useTx() {
       }
       setState({ status: "success", hash: hash! });
       await queryClient.invalidateQueries();
-      return true;
+      return hash;
     } catch (error) {
       setState({ status: "error", failure: explainError(error) });
-      return false;
+      return undefined;
     }
   }
 
@@ -235,7 +235,9 @@ export function useTimeline(id: bigint) {
           logIndex: log.logIndex,
         });
       }
-      return entries;
+      // Funding also emits a transfer, already covered by its own entry.
+      const fundingTxs = new Set(logs.filter((log) => log.eventName === "InvoiceFunded").map((log) => log.transactionHash));
+      return entries.filter((entry) => !(entry.title === "Units moved" && fundingTxs.has(entry.hash)));
     },
   });
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { isAddress, type Address } from "viem";
+import { isAddress, type Address, type Hash } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
 import { Addr, Due, Empty, Field, Notice, Page, RequireWallet, Section, Stamp, TxResult } from "@/components/ui";
 import { hundiAbi } from "@/lib/abi";
@@ -11,7 +11,19 @@ import { HUNDI, ROLE_INVESTOR } from "@/lib/config";
 import { parseUsdt, usdt } from "@/lib/format";
 import { POLL_MS, Status, approveUsdt, useInvoices, useNow, useParticipant, useTx, useUsdt, type InvoiceView } from "@/lib/hooks";
 
-function BuyCard({ invoice, allowance, balance, eligible }: { invoice: InvoiceView; allowance: bigint; balance: bigint; eligible: boolean }) {
+function BuyCard({
+  invoice,
+  allowance,
+  balance,
+  eligible,
+  onBought,
+}: {
+  invoice: InvoiceView;
+  allowance: bigint;
+  balance: bigint;
+  eligible: boolean;
+  onBought: (hash: Hash) => void;
+}) {
   const [amount, setAmount] = useState("");
   const tx = useTx();
   const units = parseUsdt(amount);
@@ -20,10 +32,16 @@ function BuyCard({ invoice, allowance, balance, eligible }: { invoice: InvoiceVi
   const tooMuch = units !== null && units > invoice.sellerUnits;
   const short = price > balance;
 
-  function buy() {
+  async function buy() {
     const fund = { address: HUNDI, abi: hundiAbi, functionName: "fund", args: [invoice.id, units!] };
-    if (allowance >= price) tx.run([fund], ["Buying units"]);
-    else tx.run([approveUsdt(price), fund], ["Step 1 of 2: approving USDT", "Step 2 of 2: swapping USDT for units"]);
+    const hash =
+      allowance >= price
+        ? await tx.run([fund], ["Buying units"])
+        : await tx.run([approveUsdt(price), fund], ["Step 1 of 2: approving USDT", "Step 2 of 2: swapping USDT for units"]);
+    if (hash) {
+      setAmount("");
+      onBought(hash);
+    }
   }
 
   return (
@@ -169,6 +187,8 @@ export default function InvestorPage() {
   const { data: wallet } = useUsdt(address);
   const { data: participant } = useParticipant(address);
   const now = useNow();
+  // Kept here because a fully bought invoice disappears from the list, along with its card.
+  const [lastPurchase, setLastPurchase] = useState<Hash>();
   const eligible = !!(participant?.active && participant.roles & ROLE_INVESTOR);
   const open = (invoices ?? []).filter(
     (invoice) =>
@@ -202,9 +222,11 @@ export default function InvestorPage() {
                 allowance={wallet?.allowance ?? 0n}
                 balance={wallet?.balance ?? 0n}
                 eligible={eligible}
+                onBought={setLastPurchase}
               />
             ))
           )}
+          {lastPurchase && <TxResult state={{ status: "success", hash: lastPurchase }} />}
         </Section>
         <Section title="Your holdings">
           {address && <Positions invoices={invoices ?? []} owner={address} />}
