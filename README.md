@@ -2,20 +2,21 @@
 
 **Onchain invoice financing on Whitechain.** An exporter sells an unpaid invoice to verified investors for USDT today. On the due date, the contract collects from the importer and pays whoever holds the invoice.
 
-A hundi is the traditional Indian bill of exchange, a payment promise that merchants traded long before banks. Hundi keeps the idea and replaces trust in the paperwork with rules the contract enforces.
+A hundi is the traditional Indian bill of exchange, a payment promise that merchants traded long before banks. Hundi keeps the idea and enforces the transfer and settlement rules in a contract.
 
 Built at ETHGlobal Mumbai 2026 for the Whitechain "Tokenize · Real World Finance" track.
 
 ## Why this needs onchain stablecoin settlement
 
-A bank rail can't exchange a receivable for cash atomically, can't let every financier check one shared registry of already-financed invoices, and can't route the importer's repayment to whoever holds the claim on the due date. Here all three are one contract settled in USDT on Whitechain.
+A regular payment rail only moves money. It can't swap a receivable for cash in one atomic step, and it can't send the importer's repayment to whoever holds the claim on the due date. Here both happen in one contract, settled in USDT on Whitechain.
 
 ## The problem
 
-An exporter ships goods and then waits 60 to 90 days to be paid. Invoice discounting exists, but it has two weaknesses:
+An exporter ships goods and then waits 60 to 90 days to be paid. Selling the invoice at a discount to get cash early is established practice, and regulated platforms such as India's TReDS already connect sellers, buyers and financiers. Hundi doesn't replace them. It explores what a shared ledger can improve:
 
-1. **Double financing:** a seller can pledge one invoice to several financiers, who can't see each other's books.
-2. **Settlement risk:** paying for the receivable and transferring it are separate steps, and repayment can be sent to the seller rather than to whoever now owns the claim.
+1. **Double financing:** financiers working separately may not see each other's books, so one invoice can be pledged twice. Everyone using Hundi checks one registry.
+2. **Settlement risk:** when paying for an invoice and transferring it are separate steps, one can happen without the other, and repayment can reach the seller rather than whoever now owns the claim. Here the swap is atomic, and repayment only goes to the contract.
+3. **Who can buy:** verified investors can buy part of an invoice and resell it, with the rules enforced on every transfer.
 
 ## Deployed on Whitechain Sepolia (chain 1874)
 
@@ -49,7 +50,7 @@ Each rule has tests that expect the failure, in [contracts/test](contracts/test)
 | # | Rule | Reverts with |
 |---|---|---|
 | R1 | Only a verified, unexpired exporter can issue, and the debtor must be a verified importer | `NotEligible` |
-| R2 | An invoice reference (GST e-invoice IRN hash) can be registered once, ever, by anyone | `DuplicateInvoice` |
+| R2 | Within Hundi, an invoice reference (GST e-invoice IRN hash) can be registered once, ever, by anyone | `DuplicateInvoice` |
 | R3 | No units exist until the importer acknowledges, so nothing can be funded before that | `NotAcknowledged` |
 | R4 | Units can only be held by verified, unfrozen participants, including in direct and batch transfers | `TransferNotAllowed` |
 | R5 | Buying and transfers stop on the due date, which fixes who gets paid | `PastDueDate` |
@@ -148,13 +149,17 @@ pnpm --dir web dev
 
 ## Current limitations
 
-- **The verifier is one trusted admin.** Production needs a real KYB provider or onchain attestations.
+- **Double financing is only blocked inside Hundi.** A seller could still finance the same invoice with a bank or another platform, which can't see this registry.
 - **IRN uniqueness is only as good as the input.** There is no live integration with India's invoice registration portal, so a seller could invent a reference. Importer acknowledgement is the check against that.
-- **Repayment relies on a USDT allowance the importer can revoke,** which leads to the default path. There is no credit assessment, insurance or recourse to the exporter.
+- **Fake invoices are still possible.** An exporter and a friendly importer could both be verified and confirm an invoice for goods that never shipped. Nothing here checks that a real trade happened.
+- **Nothing prices the risk.** Investors see a wallet address and a discount, with no credit information on the importer. There is also no insurance and no recourse to the exporter, so investors carry the default risk.
+- **A token isn't a legal agreement.** Acknowledging on chain doesn't create an enforceable obligation by itself, and there is no assignment contract or dispute process after an invoice is confirmed. Recovering from an importer who refuses to pay would need a legal agreement behind this.
+- **Importers have to pay onchain.** Repayment relies on the importer holding USDT and keeping an allowance it can revoke, which leads to the default path. Real companies pay through banks, so this is probably the biggest hurdle to adoption.
+- **The verifier is one trusted admin.** Production needs a real KYB provider or onchain attestations.
 - **Short due dates and a 60-second grace period are for the demo.** Production would enforce a minimum tenor and a grace period of days.
 - **The web app uses approve then fund,** so a purchase takes two wallet prompts. `fundWithPermit` is deployed and tested against the real USDT, but isn't wired into the app yet.
 - **The keeper runs on one machine.** Anyone can call the same functions, but nothing guarantees someone does.
-- **Testnet only, not audited.** Selling receivables to investors and using stablecoins for trade settlement have legal and regulatory requirements in India and elsewhere that this project doesn't address.
+- **Testnet only, not audited.** Selling receivables to investors and using stablecoins for trade settlement have legal and regulatory requirements in India and elsewhere, including rules on how export proceeds are received, that this project doesn't address.
 
 ## More
 
