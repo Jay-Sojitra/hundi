@@ -202,7 +202,7 @@ export default function InvestorPage() {
     <Page
       eyebrow="Investor"
       title="Buy invoices at a discount"
-      intro="Every invoice here has been confirmed by the importer who owes it. You pay less than face value now, and the contract pays you face value on the due date."
+      intro="Every invoice here has been confirmed by the importer who owes it. You pay less than face value now. If the importer pays in full, the contract pays you face value on the due date."
     >
       <RequireWallet>
         {wallet && (

@@ -4,7 +4,7 @@ import { BaseError, ContractFunctionRevertedError } from "viem";
 const RULES: Record<string, { rule?: string; message: string }> = {
   DuplicateInvoice: {
     rule: "R2",
-    message: "This invoice reference is already registered, so it can't be financed a second time.",
+    message: "This invoice reference is already registered, and each reference can only be used once.",
   },
   NotEligible: { rule: "R1", message: "This wallet isn't verified for that role, or its approval has expired." },
   NotAcknowledged: { rule: "R3", message: "This invoice is not open: the importer has to confirm it first." },

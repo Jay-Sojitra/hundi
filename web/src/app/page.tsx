@@ -5,14 +5,14 @@ import { InvoiceTable, Section } from "@/components/ui";
 import { useInvoices } from "@/lib/hooks";
 
 const ROLES = [
-  { href: "/exporter", name: "Exporter", text: "Issue an invoice and get paid in USDT today, at a discount you set." },
+  { href: "/exporter", name: "Exporter", text: "Issue an invoice and sell it for USDT at a discount you set." },
   { href: "/importer", name: "Importer", text: "Confirm a genuine invoice, and repay on the due date in one step." },
-  { href: "/investor", name: "Investor", text: "Buy a discounted claim. You get paid in full, without doing anything." },
+  { href: "/investor", name: "Investor", text: "Buy a discounted claim. When the importer pays, you are paid without doing anything." },
   { href: "/verifier", name: "Verifier", text: "Decide who may take part. Every rule checks this list." },
 ];
 
 const RULES = [
-  ["One invoice, one financing", "A reference can be registered once, ever. A second attempt reverts."],
+  ["One reference, one registration", "An invoice reference can be registered once, ever. A second attempt reverts."],
   ["Debtor confirms first", "No units exist until the importer says the invoice is real."],
   ["Verified holders only", "Sending units to an unverified wallet reverts, even in a direct transfer."],
   ["Asset and cash together", "Units and USDT move in one transaction, or neither moves."],
@@ -27,7 +27,7 @@ export default function Home() {
     <main className="mx-auto w-full max-w-5xl px-5 py-12">
       <p className="eyebrow">Invoice finance, enforced onchain</p>
       <h1 className="display mt-3 max-w-3xl text-5xl leading-[1.08]">
-        Shipped the goods? Get paid today, not in 90 days.
+        Shipped the goods? Sell the invoice instead of waiting 90 days.
       </h1>
       <p className="mt-5 max-w-2xl text-lg text-[var(--muted)]">
         An exporter sells an unpaid invoice to verified investors for USDT. On the due date the contract collects from
