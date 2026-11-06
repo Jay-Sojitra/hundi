@@ -8,3 +8,4 @@ broadcast/
 !.env.example
 .vercel/
 .DS_Store
+out/
