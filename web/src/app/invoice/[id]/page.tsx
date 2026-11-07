@@ -13,7 +13,7 @@ export default function InvoicePage() {
   const id = /^\d+$/.test(params.id) ? BigInt(params.id) : 0n;
   const { data: invoices, isLoading } = useInvoices();
   const { data: holders } = useHolders(id);
-  const { data: timeline } = useTimeline(id);
+  const { data: timeline, isError: timelineFailed } = useTimeline(id);
   const { isConnected } = useAccount();
   const now = useNow();
   const settle = useTx();
@@ -122,7 +122,7 @@ export default function InvoicePage() {
 
       <Section title="Onchain history" aside="Every step links to the explorer">
         {!timeline?.length ? (
-          <Empty>Reading events…</Empty>
+          <Empty>{timelineFailed ? "Couldn't read the history from the chain. Retrying…" : "Reading events…"}</Empty>
         ) : (
           <ol className="space-y-3">
             {timeline.map((entry) => (

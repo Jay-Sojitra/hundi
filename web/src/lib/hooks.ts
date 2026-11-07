@@ -208,6 +208,19 @@ export function useHolders(id: bigint) {
   });
 }
 
+/** The public RPC refuses log queries over 10,000 blocks, so reads since deployment go in chunks. */
+const LOG_CHUNK = 9_000n;
+
+export async function blockRangesSinceDeploy(c: { getBlockNumber: () => Promise<bigint> }) {
+  const latest = await c.getBlockNumber();
+  const ranges: { fromBlock: bigint; toBlock: bigint }[] = [];
+  for (let fromBlock = DEPLOY_BLOCK; fromBlock <= latest; fromBlock += LOG_CHUNK) {
+    const end = fromBlock + LOG_CHUNK - 1n;
+    ranges.push({ fromBlock, toBlock: end < latest ? end : latest });
+  }
+  return ranges;
+}
+
 export type TimelineEntry = { title: string; detail?: string; hash: Hash; blockNumber: bigint; logIndex: number };
 
 export function useTimeline(id: bigint) {
@@ -216,12 +229,11 @@ export function useTimeline(id: bigint) {
     queryKey: ["timeline", id.toString()],
     refetchInterval: POLL_MS,
     queryFn: async (): Promise<TimelineEntry[]> => {
-      const logs = await c!.getContractEvents({
-        address: HUNDI,
-        abi: hundiAbi,
-        fromBlock: DEPLOY_BLOCK,
-        toBlock: "latest",
-      });
+      const ranges = await blockRangesSinceDeploy(c!);
+      const pages = await Promise.all(
+        ranges.map((range) => c!.getContractEvents({ address: HUNDI, abi: hundiAbi, ...range })),
+      );
+      const logs = pages.flat();
       const entries: TimelineEntry[] = [];
       for (const log of logs) {
         const args = log.args as Record<string, unknown>;

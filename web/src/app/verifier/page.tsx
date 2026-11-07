@@ -6,9 +6,9 @@ import { isAddress, stringToHex, type Address } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
 import { Addr, Empty, Field, Notice, Page, RequireWallet, Section, TxResult } from "@/components/ui";
 import { registryAbi } from "@/lib/abi";
-import { DEPLOY_BLOCK, REGISTRY, ROLE_EXPORTER, ROLE_IMPORTER, ROLE_INVESTOR } from "@/lib/config";
+import { REGISTRY, ROLE_EXPORTER, ROLE_IMPORTER, ROLE_INVESTOR } from "@/lib/config";
 import { dateTime } from "@/lib/format";
-import { POLL_MS, useIsVerifier, useTx } from "@/lib/hooks";
+import { POLL_MS, blockRangesSinceDeploy, useIsVerifier, useTx } from "@/lib/hooks";
 
 const ROLES = [
   { bit: ROLE_EXPORTER, label: "Exporter" },
@@ -120,21 +120,27 @@ function ParticipantRow({ account }: { account: Address }) {
 
 function Participants() {
   const client = usePublicClient();
-  const { data: accounts } = useQuery({
+  const { data: accounts, isError } = useQuery({
     queryKey: ["participants"],
     refetchInterval: POLL_MS,
     queryFn: async () => {
-      const logs = await client!.getContractEvents({
-        address: REGISTRY,
-        abi: registryAbi,
-        eventName: "ParticipantSet",
-        fromBlock: DEPLOY_BLOCK,
-        toBlock: "latest",
-      });
-      return [...new Set(logs.map((log) => log.args.account as Address))];
+      const ranges = await blockRangesSinceDeploy(client!);
+      const pages = await Promise.all(
+        ranges.map((range) =>
+          client!.getContractEvents({
+            address: REGISTRY,
+            abi: registryAbi,
+            eventName: "ParticipantSet",
+            ...range,
+          }),
+        ),
+      );
+      return [...new Set(pages.flat().map((log) => log.args.account as Address))];
     },
   });
-  if (!accounts?.length) return <Empty>No participants approved yet.</Empty>;
+  if (!accounts && isError) return <Notice tone="warn">Couldn&apos;t read the list from the chain. Retrying…</Notice>;
+  if (!accounts) return <Empty>Reading the chain…</Empty>;
+  if (!accounts.length) return <Empty>No participants approved yet.</Empty>;
   return (
     <div className="-mx-5 overflow-x-auto">
       <table className="ledger w-full min-w-[560px]">
