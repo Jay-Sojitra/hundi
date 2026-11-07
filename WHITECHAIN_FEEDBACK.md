@@ -18,6 +18,7 @@ Running notes from building Hundi on Whitechain Sepolia. Updated as we go.
 
 - **The faucet limit shapes how you build.** One drip of 0.5 WBT has to cover deployment, gas for every party in a multi-wallet demo, and any swap into USDT. We tested on a fork first largely to avoid wasting it.
 - **A confusing error for an unfunded wallet.** Sending from a wallet with no WBT returns `gas required exceeds allowance (0)` from `eth_estimateGas`. It looks like a contract revert. Mentioning it in a troubleshooting page would save time.
+- **A log limit that only appears as the chain grows.** The public RPC rejects `eth_getLogs` across more than 10,000 blocks with `query exceeds max block range 10000`. With 1-second blocks, that is under 3 hours. Our app read events from its deployment block, so it worked at first, then its approved list and invoice history came back empty once the chain passed that point. We fixed it by reading in chunks. Publishing this limit next to the RPC details would help builders catch it before a demo.
 
 ## What the docs were missing
 
